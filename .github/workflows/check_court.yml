@@ -2,18 +2,8 @@ name: Court Page Keyword Monitor
 
 on:
   schedule:
-    # Runs automatically every 30 minutes
     - cron: '*/30 * * * *'
   workflow_dispatch:
-    inputs:
-      keywords:
-        description: 'Keywords to check (separate with commas)'
-        required: False
-        default: 'tung, Criminal'
-      match_all:
-        description: 'Match ALL keywords? (true/false)'
-        required: False
-        default: 'false'
 
 jobs:
   run-monitor:
@@ -35,6 +25,6 @@ jobs:
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        INPUT_KEYWORDS: ${{ github.event.inputs.keywords }}
-        INPUT_MATCH_ALL: ${{ github.event.inputs.match_all }}
+        GH_PAT: ${{ secrets.GH_PAT }}
+        STORED_KEYWORDS: ${{ vars.STORED_KEYWORDS }}
       run: python court_checker.py

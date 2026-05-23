@@ -1,7 +1,7 @@
 import os
 import time
-import smtplib
-from email.mime.text import MIMEText
+import urllib.request
+import json
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -10,34 +10,58 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 TARGET_URL = "https://www.sci.gov.in/latest-orders/"
 
-# --- EDIT YOUR KEYWORDS HERE ---
-KEYWORDS_TO_FIND = ["Criminal", "Interim Order"] 
-MATCH_ALL = False 
-# ------------------------------
+# --- EDIT YOUR DEFAULT AUTOMATED KEYWORDS HERE ---
+# These are used for the automated hourly background scans
+DEFAULT_KEYWORDS = ["Criminal", "Interim Order"]
+DEFAULT_MATCH_ALL = False 
+# ------------------------------------------------
 
-def send_email_alert(matched_words):
-    """Sends an email notification using GitHub Secrets."""
-    sender = os.environ.get("EMAIL_SENDER")
-    password = os.environ.get("EMAIL_PASSWORD")
-    receiver = os.environ.get("EMAIL_RECEIVER")
+def get_keywords():
+    """Extracts keywords from GitHub manual actions input or falls back to defaults."""
+    manual_keywords = os.environ.get("INPUT_KEYWORDS", "")
+    manual_match_mode = os.environ.get("INPUT_MATCH_ALL", "")
+
+    # If triggered manually with custom keywords
+    if manual_keywords:
+        print("[INFO] Using custom keywords provided via GitHub Actions panel.")
+        keywords = [kw.strip() for kw in manual_keywords.split(",") if kw.strip()]
+        match_all_mode = manual_match_mode.strip().lower() == "true"
+        return keywords, match_all_mode
+
+    # Otherwise, use the automated defaults defined above
+    print("[INFO] Running automated check using default script keywords.")
+    return DEFAULT_KEYWORDS, DEFAULT_MATCH_ALL
+
+def send_telegram_alert(matched_words):
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     
-    if not all([sender, password, receiver]):
-        print("[WARNING] Email credentials missing. Skipping email alert.")
+    if not bot_token or not chat_id:
+        print("[WARNING] Telegram credentials missing. Skipping notification.")
         return
 
-    msg = MIMEText(f"The automated checker found a match for your keywords: {matched_words}\n\nCheck the page here: {TARGET_URL}")
-    msg['Subject'] = f" Supreme Court Alert: Keywords Found!"
-    msg['From'] = sender
-    msg['To'] = receiver
+    text_message = (
+        f"🚨 *Supreme Court Alert*\n\n"
+        f"Found keywords: {', '.join(matched_words)}\n"
+        f"🔗 [View Latest Orders]({TARGET_URL})"
+    )
 
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text_message,
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": True
+    }
+    
     try:
-        # Using Gmail's SMTP server as a standard example
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(sender, password)
-            server.sendmail(sender, [receiver], msg.as_string())
-        print("Alert email sent successfully!")
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req) as response:
+            if response.status == 200:
+                print("Telegram notification sent successfully!")
     except Exception as e:
-        print(f"Failed to send email: {e}")
+        print(f"Failed to send Telegram message: {e}")
 
 def fetch_page_source(url):
     options = Options()
@@ -57,20 +81,22 @@ def fetch_page_source(url):
         driver.quit()
 
 if __name__ == "__main__":
-    print(f"Scanning {TARGET_URL}...")
+    keywords, match_all = get_keywords()
+    print(f"Scanning {TARGET_URL} for: {keywords} (Match All: {match_all})")
+    
     try:
         html = fetch_page_source(TARGET_URL)
         soup = BeautifulSoup(html, 'html.parser')
         page_text = soup.get_text().lower()
         
-        matches_found = [kw for kw in KEYWORDS_TO_FIND if kw.lower() in page_text]
-        is_found = len(matches_found) == len(KEYWORDS_TO_FIND) if MATCH_ALL else len(matches_found) > 0
+        matches_found = [kw for kw in keywords if kw.lower() in page_text]
+        is_found = len(matches_found) == len(keywords) if match_all else len(matches_found) > 0
         
         if is_found:
-            print(f"[ALERT] Found keywords: {matches_found}")
-            send_email_alert(matches_found)
+            print(f"[ALERT] Found matching text: {matches_found}")
+            send_telegram_alert(matches_found)
         else:
-            print("[INFO] No matching keywords found.")
+            print("[INFO] No matching phrases found.")
             
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error during execution: {e}")

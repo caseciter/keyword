@@ -1,15 +1,7 @@
 import os
-import time
 import urllib.request
 import json
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 
 TARGET_URL = "https://www.sci.gov.in/latest-orders/"
 
@@ -67,43 +59,27 @@ def send_telegram_alert(matched_words):
     except Exception as e:
         print(f"Failed to send Telegram message: {e}")
 
-def fetch_page_source_and_extract_text(url):
-    """Launches Selenium, waits for the table/body to load, and extracts deep text."""
-    options = Options()
-    options.add_argument("--headless=new") # Modern headless flag
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    
-    try:
-        driver.get(url)
-        
-        # Explicitly wait up to 15 seconds for the body text layout to fully activate
-        WebDriverWait(driver, 15).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        time.sleep(5) # Final safety buffer for background AJAX frames to fill
-        
-        # Extract direct visible text from the browser engine rather than raw unrendered HTML string
-        visible_text = driver.find_element(By.TAG_NAME, "body").text
-        return visible_text
-    finally:
-        driver.quit()
+def fetch_fast_page_text(url):
+    """Bypasses firewall and downloads page source instantly without browser overhead."""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5'
+    }
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=15) as response:
+        html_content = response.read().decode('utf-8')
+        soup = BeautifulSoup(html_content, 'html.parser')
+        return soup.get_text()
 
 if __name__ == "__main__":
     keywords, match_all = get_keywords()
-    print(f"Scanning {TARGET_URL} for: {keywords} (Match All: {match_all})")
+    print(f"Scanning {TARGET_URL} for: {keywords}")
     
     try:
-        # Fetch rendered textual data directly from browser memory
-        page_text = fetch_page_source_and_extract_text(TARGET_URL).lower()
-        
-        # Diagnostics: Print a small snippet of extracted data to GitHub console logs
-        print(f"[DEBUG] Raw extracted text length: {len(page_text)} characters.")
+        # Instant direct extraction
+        page_text = fetch_fast_page_text(TARGET_URL).lower()
+        print(f"[DEBUG] Document text layout scraped successfully ({len(page_text)} chars).")
         
         matches_found = [kw for kw in keywords if kw.lower() in page_text]
         is_found = len(matches_found) == len(keywords) if match_all else len(matches_found) > 0
@@ -112,7 +88,7 @@ if __name__ == "__main__":
             print(f"[ALERT] Match discovered: {matches_found}")
             send_telegram_alert(matches_found)
         else:
-            print("[INFO] No matching keywords discovered on the current page view window.")
+            print("[INFO] No matching keywords found on current page layer.")
             
     except Exception as e:
-        print(f"Runtime execution failure error: {e}")
+        print(f"Extraction failed: {e}")

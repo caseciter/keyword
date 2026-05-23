@@ -2,9 +2,17 @@ name: Court Page Keyword Monitor
 
 on:
   schedule:
-    # Runs every hour. (You can adjust this using cron syntax)
-    - cron: '0 * * * *'
-  workflow_dispatch: # Allows you to also trigger it manually with a button click
+    - cron: '0 * * * *' # Runs automatically every hour
+  workflow_dispatch:   # Allows manual trigger with custom inputs
+    inputs:
+      keywords:
+        description: 'Keywords to check (separate with commas)'
+        required: False
+        default: 'Criminal, Interim Order, Bail'
+      match_all:
+        description: 'Require ALL keywords to match? (true/false)'
+        required: False
+        default: 'false'
 
 jobs:
   run-monitor:
@@ -27,7 +35,9 @@ jobs:
 
     - name: Execute Check Script
       env:
-        EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
-        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-        EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        # Reads from the manual input box if available, otherwise uses defaults
+        INPUT_KEYWORDS: ${{ github.event.inputs.keywords }}
+        INPUT_MATCH_ALL: ${{ github.event.inputs.match_all }}
       run: python court_checker.py

@@ -2,15 +2,16 @@ name: Court Page Keyword Monitor
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    # Runs automatically every 30 minutes
+    - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
       keywords:
-        description: 'Keywords to check'
+        description: 'Keywords to check (separate with commas)'
         required: False
         default: 'tung, Criminal'
       match_all:
-        description: 'Match ALL keywords?'
+        description: 'Match ALL keywords? (true/false)'
         required: False
         default: 'false'
 

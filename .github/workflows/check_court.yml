@@ -2,15 +2,15 @@ name: Court Page Keyword Monitor
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs automatically every hour
-  workflow_dispatch:   # Allows manual trigger with custom inputs
+    - cron: '0 * * * *'
+  workflow_dispatch:
     inputs:
       keywords:
-        description: 'Keywords to check (separate with commas)'
+        description: 'Keywords to check'
         required: False
-        default: 'Criminal, Interim Order, Bail'
+        default: 'tung, Criminal'
       match_all:
-        description: 'Require ALL keywords to match? (true/false)'
+        description: 'Match ALL keywords?'
         required: False
         default: 'false'
 
@@ -27,17 +27,13 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: Install Google Chrome and dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y google-chrome-stable
-        pip install selenium beautifulsoup4 webdriver-manager
+    - name: Install parser package
+      run: pip install beautifulsoup4
 
     - name: Execute Check Script
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        # Reads from the manual input box if available, otherwise uses defaults
         INPUT_KEYWORDS: ${{ github.event.inputs.keywords }}
         INPUT_MATCH_ALL: ${{ github.event.inputs.match_all }}
       run: python court_checker.py
